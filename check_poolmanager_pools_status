@@ -1,0 +1,190 @@
+#!/bin/sh
+
+
+#initialise and secure the shell execution environment
+unset -v IFS
+PATH='/usr/sbin:/sbin:/usr/bin:/bin'
+
+
+
+
+
+
+
+
+#*******************************************************************************
+#*** Print Program Usage                                                     ***
+#*******************************************************************************
+print_usage()
+{
+	printf '\n'
+}
+
+
+
+
+#*******************************************************************************
+#*** Print Status And Exit Monitoring Plugin                                 ***
+#*******************************************************************************
+print_status_and_exit_monitoring_plugin()
+{
+	local status="$1"
+	local message="$2"
+	local performance_data="$3"
+	
+	
+	#print monitoring-plugin status
+	case "${status}" in
+	(0|[Oo][Kk])
+		printf 'OK'
+		;;
+	
+	(1|[Ww][Aa][Rr][Nn][Ii][Nn][Gg])
+		printf 'WARNING'
+		;;
+	
+	(2|[Cc][Rr][Ii][Tt][Ii][Cc][Aa][Ll])
+		printf 'CRITICAL'
+		;;
+	
+	(3|[Uu][Nn][Kk][Nn][Oo][Ww][Nn])
+		printf 'UNKNOWN'
+		;;
+	
+	(*)
+		printf 'UNKNOWN: Invalid monitoring-plugin status.\n'
+		exit 3
+	esac
+	
+	
+	#print monitoring-plugin message
+	if [ -n "${message}" ]; then
+		printf ': %s' "${message}"
+	fi
+	
+	
+	#print monitoring-plugin performance data
+	if [ -n "${performance_data}" ]; then
+		printf ' | %s' "${performance_data}"
+	fi
+	
+	
+	printf '\n'
+	
+	
+	#exit with the monitoring-plugin status code as exit status
+	case "${status}" in
+	(0|[Oo][Kk])
+		exit 0
+		;;
+	
+	(1|[Ww][Aa][Rr][Nn][Ii][Nn][Gg])
+		exit 1
+		;;
+	
+	(2|[Cc][Rr][Ii][Tt][Ii][Cc][Aa][Ll])
+		exit 2
+		;;
+	
+	(3|[Uu][Nn][Kk][Nn][Oo][Ww][Nn])
+		exit 3
+		;;
+	esac
+	
+	
+	exit 3
+}
+
+
+
+
+#*******************************************************************************
+#*** Initialisation                                                          ***
+#*******************************************************************************
+#parse arguments
+if [ $# -eq 1 ]; then
+	case "$1" in
+	(--help|-h)
+		#print the program usage and exit
+		print_usage >&2
+		exit 3
+		;;
+	
+	(*)
+		print_status_and_exit_monitoring_plugin UNKNOWN 'Invalid monitoring plug-in arguments.'
+	esac
+elif [ $# -ne 0 ]; then
+	print_status_and_exit_monitoring_plugin UNKNOWN 'Invalid monitoring plug-in arguments.'
+fi
+
+
+#check for “dcache_admin”
+if [ ! -x /usr/local/bin/dcache_admin ]; then
+	print_status_and_exit_monitoring_plugin UNKNOWN '“dcache_admin” is not available.'
+fi
+
+
+
+
+#*******************************************************************************
+#*** Check Pool Manager Pools Status                                         ***
+#*******************************************************************************
+#get pools status listing
+pool_status_listing="$( sudo /usr/local/bin/dcache_admin '\sp psu ls pool -l' )"
+if [ $? -ne 0 ]; then #error handling
+	print_status_and_exit_monitoring_plugin UNKNOWN 'Could not get pool status listing from the pool manager.'
+fi
+pool_status_listing="$( printf '%s' "${pool_status_listing}"  |  grep '^[^[:space:]].*  (.*)$'  |  sort --version-sort )"
+
+
+#parse pools status listing
+tmp='enabled=[Tt][Rr][Uu][Ee]'
+pools_not_enabled="$( printf '%s' "${pool_status_listing}"  |  sed "/  \((${tmp};..*)\|(..*;${tmp};..*)\|(..*;${tmp})\)$/d; s/  (.*)$//" )"
+
+tmp='mode=[Ee][Nn][Aa][Bb][Ll][Ee][Dd]'
+#pool down		disabled(fetch,store,stage,p2p-client,p2p-server,dead)
+#strict disabled	disabled(fetch,store,stage,p2p-client,p2p-server)
+#rdonly			disabled(store,stage,p2p-client)
+tmp="$( printf '%s' "${pool_status_listing}"  |  sed "/  \((${tmp};..*)\|(..*;${tmp};..*)\|(..*;${tmp})\)$/d" )"
+pools_mode_not_enabled_not_rdonly="$( printf '%s' "${tmp}"  |  grep -v 'disabled(store,stage,p2p-client)'  |  sed 's/  (.*)$//'  )"
+
+
+if [ -n "$( printf '%s\n' "${pools_not_enabled}" )"  -o  -n "$( printf '%s\n' "${pools_mode_not_enabled_not_rdonly}" )" ]; then
+	print_status_and_exit_monitoring_plugin CRITICAL "not enabled: $( printf '%s' "${pools_not_enabled}" | sed 's/^lcg-lrz-dc//' | xargs ); mode not enabled not rdonly: $( printf '%s' "${pools_mode_not_enabled_not_rdonly}" | sed 's/^lcg-lrz-dc//' | xargs )"
+else
+	print_status_and_exit_monitoring_plugin OK
+fi
+
+
+
+exit 0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#Copyright © 2016, Christoph Anton Mitterer <mail@christoph.anton.mitterer.name>.
+#All rights reserved.
+#
+#
+#This program is free software: you can redistribute it and/or modify it under
+#the terms of the GNU General Public License as published by the Free Software
+#Foundation, either version 3 of the License, or (at your option) any later
+#version.
+#This program is distributed in the hope that it will be useful, but WITHOUT ANY
+#WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+#PARTICULAR PURPOSE.
+#See the GNU General Public License for more details.
+#You should have received a copy of the GNU General Public License along with
+#this program. If not, see <http://www.gnu.org/licenses/>.
