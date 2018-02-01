@@ -13,6 +13,14 @@ PATH='/usr/sbin:/sbin:/usr/bin:/bin'
 
 
 #*******************************************************************************
+#*** Default Values                                                          ***
+#*******************************************************************************
+POOL_ACTIVENESS_MAX=300
+
+
+
+
+#*******************************************************************************
 #*** Print Program Usage                                                     ***
 #*******************************************************************************
 print_usage()
@@ -148,9 +156,19 @@ tmp='mode=[Ee][Nn][Aa][Bb][Ll][Ee][Dd]'
 tmp="$( printf '%s' "${pool_status_listing}"  |  sed "/  \((${tmp};..*)\|(..*;${tmp};..*)\|(..*;${tmp})\)$/d" )"
 pools_mode_not_enabled_not_rdonly="$( printf '%s' "${tmp}"  |  grep -v 'disabled(store,stage,p2p-client)'  |  sed 's/  (.*)$//'  )"
 
+pools_not_active="$(
+printf '%s' "${pool_status_listing}" | \
+while IFS='' read -r tmp; do
+	pool_activeness="$( printf '%s' "${tmp}"  |  sed "s/^.*\((\|;\)active=\([[:digit:]][[:digit:]]*\)\()\|;\).*$/\2/" )"
+	if [ "${pool_activeness}" -gt "${POOL_ACTIVENESS_MAX}" ]; then
+		printf '%s(%s)\n' "$( printf '%s' "${tmp}"  |  sed 's/  (.*)$//' )" "${pool_activeness}"
+	fi
+done
+)"
 
-if [ -n "$( printf '%s\n' "${pools_not_enabled}" )"  -o  -n "$( printf '%s\n' "${pools_mode_not_enabled_not_rdonly}" )" ]; then
-	print_status_and_exit_monitoring_plugin CRITICAL "not enabled: $( printf '%s' "${pools_not_enabled}" | sed 's/^lcg-lrz-dc//' | xargs ); mode not enabled not rdonly: $( printf '%s' "${pools_mode_not_enabled_not_rdonly}" | sed 's/^lcg-lrz-dc//' | xargs )"
+
+if [ -n "$( printf '%s\n' "${pools_not_enabled}" )"  -o  -n "$( printf '%s\n' "${pools_mode_not_enabled_not_rdonly}" )"  -o  -n "$( printf '%s\n' "${pools_not_active}" )" ]; then
+	print_status_and_exit_monitoring_plugin CRITICAL "not enabled: $( printf '%s' "${pools_not_enabled}" | sed 's/^lcg-lrz-dc//' | xargs ); mode not enabled not rdonly: $( printf '%s' "${pools_mode_not_enabled_not_rdonly}" | sed 's/^lcg-lrz-dc//' | xargs ); not active: $( printf '%s' "${pools_not_active}" | sed 's/^lcg-lrz-dc//' | xargs )"
 else
 	print_status_and_exit_monitoring_plugin OK
 fi
