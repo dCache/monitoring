@@ -1,0 +1,6 @@
+Changes to this directory shouldn’t be directly commited to this repository but
+rather to
+“ssh://git@git.srv.scientia.net/calestyo/lmu/tools/dcache/check_compare_core_domains_routing_tables”,
+which is then subtree-merged here.
+
+Please contact “mail@christoph.anton.mitterer.name” in case of questions.

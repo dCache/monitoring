@@ -1,0 +1,246 @@
+#!/bin/sh
+
+
+#initialise and secure the shell execution environment
+unset -v IFS
+PATH='/usr/sbin:/sbin:/usr/bin:/bin'
+
+
+
+
+
+
+
+
+#*******************************************************************************
+#*** Print Program Usage                                                     ***
+#*******************************************************************************
+print_usage()
+{
+	printf '\n'
+}
+
+
+
+
+#*******************************************************************************
+#*** Print Status And Exit Monitoring Plugin                                 ***
+#*******************************************************************************
+print_status_and_exit_monitoring_plugin()
+{
+	local status="$1"
+	local message="$2"
+	local performance_data="$3"
+	
+	
+	#print monitoring-plugin status
+	case "${status}" in
+	(0|[Oo][Kk])
+		printf 'OK'
+		;;
+	
+	(1|[Ww][Aa][Rr][Nn][Ii][Nn][Gg])
+		printf 'WARNING'
+		;;
+	
+	(2|[Cc][Rr][Ii][Tt][Ii][Cc][Aa][Ll])
+		printf 'CRITICAL'
+		;;
+	
+	(3|[Uu][Nn][Kk][Nn][Oo][Ww][Nn])
+		printf 'UNKNOWN'
+		;;
+	
+	(*)
+		printf 'UNKNOWN: Invalid monitoring-plugin status.\n'
+		exit 3
+	esac
+	
+	
+	#print monitoring-plugin message
+	if [ -n "${message}" ]; then
+		printf ': %s' "${message}"
+	fi
+	
+	
+	#print monitoring-plugin performance data
+	if [ -n "${performance_data}" ]; then
+		printf ' | %s' "${performance_data}"
+	fi
+	
+	
+	printf '\n'
+	
+	
+	#exit with the monitoring-plugin status code as exit status
+	case "${status}" in
+	(0|[Oo][Kk])
+		exit 0
+		;;
+	
+	(1|[Ww][Aa][Rr][Nn][Ii][Nn][Gg])
+		exit 1
+		;;
+	
+	(2|[Cc][Rr][Ii][Tt][Ii][Cc][Aa][Ll])
+		exit 2
+		;;
+	
+	(3|[Uu][Nn][Kk][Nn][Oo][Ww][Nn])
+		exit 3
+		;;
+	esac
+	
+	
+	exit 3
+}
+
+
+
+
+#*******************************************************************************
+#*** Initialisation                                                          ***
+#*******************************************************************************
+#parse arguments
+if [ $# -eq 1 ]; then
+	case "$1" in
+	(--help|-h)
+		#print the program usage and exit
+		print_usage >&2
+		exit 3
+		;;
+	
+	(*)
+		print_status_and_exit_monitoring_plugin UNKNOWN 'Invalid monitoring plug-in arguments.'
+	esac
+elif [ $# -eq 0 ]; then
+	print_status_and_exit_monitoring_plugin UNKNOWN 'Invalid monitoring plug-in arguments.'
+fi
+
+
+#check for “dcache_admin”
+if [ ! -x /usr/local/bin/dcache_admin ]; then
+	print_status_and_exit_monitoring_plugin UNKNOWN '“dcache_admin” is not available.'
+fi
+
+
+
+
+#*******************************************************************************
+#*** Print A Normalised Routing Table                                        ***
+#*******************************************************************************
+print_normalised_routing_table()
+{
+	local core_domain_unescaped="$1"
+	#escape non-alphanumeric charakters for use in regular expressions
+	local core_domain="$( printf '%s' "$1"  |  sed 's|\([^[:alnum:]]\)|\\\1|g' )"
+	local first_core_domain="$( printf '%s' "$2"  |  sed 's|\([^[:alnum:]]\)|\\\1|g' )"
+	
+	
+	#get routing table of the core domain
+	local routing_table="$( sudo /usr/local/bin/dcache_admin "\s System@${core_domain_unescaped} route" 2> /dev/null )"
+	if [ $? -ne 0 ]; then #error handling
+		print_status_and_exit_monitoring_plugin UNKNOWN "Could not get routing table from domain “${core_domain_unescaped}”."
+		return 1 #dummy
+	fi
+	
+	
+	#normalise routing table (order matters)
+	#general normalisations
+	#1) From: “DOMAIN                         *@nfs_lcg-lrz-dc16    l-AAWCX1S2iNA-<unknown>-AAWEo_2NfEg@${core_domain}              ”
+	#     To: “DOMAIN                         *@nfs_lcg-lrz-dc16”
+	#   or
+	#   From: “DOMAIN                         *@core0                   c-core0-AAWCX1TAMXg-AAWCX1TJbMA@${core_domain}              ”
+	#     To: “DOMAIN                         *@core0”
+	routing_table="$( printf '%s' "${routing_table}"  |  sed -E "s/^(DOMAIN[[:space:]]+[^[:space:]]+)[[:space:]]+[cl]-[^[:space:]]+@${core_domain}[[:space:]]*$/\1/" )"
+	
+	#normalisations towards the “first” core (i.e. these are not done on the “first” core itself but all others)
+	if [ -n "${first_core_domain}" ]; then
+		#2) From: “DOMAIN                         *@${first_core_domain}”
+		#     To: “DOMAIN                         *@${core_domain}”
+		routing_table="$( printf '%s' "${routing_table}"  |  sed -E "s/^(DOMAIN[[:space:]]+\*@)${first_core_domain}$/\1${core_domain}/" )"
+		
+		#3) From: “QUEUE                       topo@*                                                  topo@${core_domain}”              ”
+		#     To: “QUEUE                       topo@*                                                  topo@${first_core_domain}              ”
+		#   or
+		#   From: “QUEUE                        acm@*                                                   acm@${core_domain}”              ”
+		#     To: “QUEUE                        acm@*                                                   acm@${first_core_domain}              ”
+		routing_table="$( printf '%s' "${routing_table}"  |  sed -E "s/^(QUEUE[[:space:]]+(topo|acm)@\*[[:space:]]+(topo|acm)@)${core_domain}([[:space:]]*)$/\1${first_core_domain}\4/" )"
+
+		#4) From: “QUEUE                       topo@*                                                     *@${first_core_domain}              ”
+		#     To: “QUEUE                       topo@*                                                     *@${core_domain}              ”
+		#   or
+		#   From: “QUEUE                        acm@*                                                     *@${first_core_domain}              ”
+		#     To: “QUEUE                        acm@*                                                     *@${core_domain}              ”
+		routing_table="$( printf '%s' "${routing_table}"  |  sed -E "s/^(QUEUE[[:space:]]+(topo|acm)@\*[[:space:]]+\*@)${first_core_domain}([[:space:]]*)$/\1${core_domain}\3/" )"
+	fi
+	
+	
+	#print routing table
+	printf '%s' "${routing_table}"  |  sort --version-sort
+	
+	return 0
+}
+
+
+
+
+#*******************************************************************************
+#*** Compare Core Domains Routing Tables                                     ***
+#*******************************************************************************
+core_domain_a="$1"
+shift 1
+
+core_domain_a_routing_table="$( print_normalised_routing_table "${core_domain_a}" )"
+
+
+#compare routing table of the “first” core domain with those of all other core domains
+while [ $# -gt 0 ]; do
+	core_domain_b="$1"
+	shift 1
+	
+	core_domain_b_routing_table="$( print_normalised_routing_table "${core_domain_b}" "${core_domain_a}" )"
+	
+	if [ "${core_domain_a_routing_table}" != "${core_domain_b_routing_table}" ]; then
+		print_status_and_exit_monitoring_plugin CRITICAL "Routing tables of (at least) core domain “${core_domain_a}” and “${core_domain_b}” differ."
+		break #dummy
+	fi
+done
+
+
+print_status_and_exit_monitoring_plugin OK
+
+
+
+
+exit 0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#Copyright © 2019, Christoph Anton Mitterer <mail@christoph.anton.mitterer.name>.
+#All rights reserved.
+#
+#
+#This program is free software: you can redistribute it and/or modify it under
+#the terms of the GNU General Public License as published by the Free Software
+#Foundation, either version 3 of the License, or (at your option) any later
+#version.
+#This program is distributed in the hope that it will be useful, but WITHOUT ANY
+#WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+#PARTICULAR PURPOSE.
+#See the GNU General Public License for more details.
+#You should have received a copy of the GNU General Public License along with
+#this program. If not, see <http://www.gnu.org/licenses/>.
