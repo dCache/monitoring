@@ -159,7 +159,10 @@ pools_mode_not_enabled_not_rdonly="$( printf '%s' "${tmp}"  |  grep -v 'disabled
 pools_not_active="$(
 printf '%s' "${pool_status_listing}" | \
 while IFS='' read -r tmp; do
-	pool_activeness="$( printf '%s' "${tmp}"  |  sed "s/^.*\((\|;\)active=\([[:digit:]][[:digit:]]*\)\()\|;\).*$/\2/" )"
+	pool_activeness="$( printf '%s' "${tmp}"  |  sed "s/^.*\((\|;\)active=\([[:digit:]][[:digit:]]*\|no\)\()\|;\).*$/\2/" )"
+	if [ "${pool_activeness}" = 'no' ]; then
+		continue
+	fi
 	if [ "${pool_activeness}" -gt "${POOL_ACTIVENESS_MAX}" ]; then
 		printf '%s(%s)\n' "$( printf '%s' "${tmp}"  |  sed 's/  (.*)$//' )" "${pool_activeness}"
 	fi
@@ -193,7 +196,7 @@ exit 0
 
 
 
-#Copyright © 2016, Christoph Anton Mitterer <mail@christoph.anton.mitterer.name>.
+#Copyright © 2016–2020, Christoph Anton Mitterer <mail@christoph.anton.mitterer.name>.
 #All rights reserved.
 #
 #
