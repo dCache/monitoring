@@ -188,8 +188,11 @@ print_normalised_routing_table()
 #*******************************************************************************
 #*** Compare Core Domains Routing Tables                                     ***
 #*******************************************************************************
+unset -v differences_found
+
 core_domain_a="$1"
 shift 1
+
 
 core_domain_a_routing_table="$( print_normalised_routing_table "${core_domain_a}" )"
 
@@ -202,13 +205,17 @@ while [ $# -gt 0 ]; do
 	core_domain_b_routing_table="$( print_normalised_routing_table "${core_domain_b}" "${core_domain_a}" )"
 	
 	if [ "${core_domain_a_routing_table}" != "${core_domain_b_routing_table}" ]; then
-		print_status_and_exit_monitoring_plugin CRITICAL "Routing tables of (at least) core domain “${core_domain_a}” and “${core_domain_b}” differ."
-		break #dummy
+		differences_found=1
+		break
 	fi
 done
 
 
-print_status_and_exit_monitoring_plugin OK
+if [ -z "${differences_found+is_set}" ]; then
+	print_status_and_exit_monitoring_plugin OK
+else
+	print_status_and_exit_monitoring_plugin CRITICAL "Routing tables of (at least) core domain “${core_domain_a}” and “${core_domain_b}” differ."
+fi
 
 
 
@@ -230,7 +237,7 @@ exit 0
 
 
 
-#Copyright © 2019, Christoph Anton Mitterer <mail@christoph.anton.mitterer.name>.
+#Copyright © 2019–2021, Christoph Anton Mitterer <mail@christoph.anton.mitterer.name>.
 #All rights reserved.
 #
 #
