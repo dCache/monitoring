@@ -31,6 +31,7 @@ print_status_and_exit_monitoring_plugin()
 	local status="$1"
 	local message="$2"
 	local performance_data="$3"
+	local details="$4"
 	
 	
 	#print monitoring-plugin status
@@ -70,6 +71,12 @@ print_status_and_exit_monitoring_plugin()
 	
 	
 	printf '\n'
+	
+	
+	#print monitoring-plugin details
+	if [ -n "${details}" ]; then
+		printf '%s\n' "${details}"
+	fi
 	
 	
 	#exit with the monitoring-plugin status code as exit status
