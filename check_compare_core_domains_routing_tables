@@ -140,8 +140,8 @@ print_normalised_routing_table()
 {
 	local core_domain_unescaped="$1"
 	#escape non-alphanumeric charakters for use in regular expressions
-	local core_domain="$( printf '%s' "$1"  |  sed 's|\([^[:alnum:]]\)|\\\1|g' )"
-	local first_core_domain="$( printf '%s' "$2"  |  sed 's|\([^[:alnum:]]\)|\\\1|g' )"
+	local core_domain="$( printf '%s' "$1"  |  sed 's%\([^[:alnum:]]\)%\\\1%g' )"
+	local first_core_domain="$( printf '%s' "$2"  |  sed 's%\([^[:alnum:]]\)%\\\1%g' )"
 	
 	
 	#get routing table of the core domain
