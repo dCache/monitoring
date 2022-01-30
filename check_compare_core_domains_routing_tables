@@ -109,7 +109,7 @@ print_status_and_exit_monitoring_plugin()
 #*** Initialisation                                                          ***
 #*******************************************************************************
 #parse arguments
-if [ $# -eq 1 ]; then
+if [ "$#" -eq 1 ]; then
 	case "$1" in
 	(--help|-h)
 		#print the program usage and exit
@@ -120,7 +120,7 @@ if [ $# -eq 1 ]; then
 	(*)
 		print_status_and_exit_monitoring_plugin UNKNOWN 'Invalid monitoring plug-in arguments.'
 	esac
-elif [ $# -eq 0 ]; then
+elif [ "$#" -eq 0 ]; then
 	print_status_and_exit_monitoring_plugin UNKNOWN 'Invalid monitoring plug-in arguments.'
 fi
 
@@ -146,7 +146,7 @@ print_normalised_routing_table()
 	
 	#get routing table of the core domain
 	local routing_table="$( sudo /usr/local/bin/dcache_admin "\s System@${core_domain_unescaped} route" 2> /dev/null )"
-	if [ $? -ne 0 ]; then #error handling
+	if [ "$?" -ne 0 ]; then #error handling
 		print_status_and_exit_monitoring_plugin UNKNOWN "Could not get routing table from domain “${core_domain_unescaped}”."
 		return 1 #dummy
 	fi
@@ -205,7 +205,7 @@ core_domain_a_routing_table="$( print_normalised_routing_table "${core_domain_a}
 
 
 #compare routing table of the “first” core domain with those of all other core domains
-while [ $# -gt 0 ]; do
+while [ "$#" -gt 0 ]; do
 	core_domain_b="$1"
 	shift 1
 	
