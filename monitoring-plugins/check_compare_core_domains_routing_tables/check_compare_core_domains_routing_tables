@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 
 #initialise and secure the shell execution environment
@@ -31,6 +31,7 @@ print_status_and_exit_monitoring_plugin()
 	local status="$1"
 	local message="$2"
 	local performance_data="$3"
+	local details="$4"
 	
 	
 	#print monitoring-plugin status
@@ -72,6 +73,12 @@ print_status_and_exit_monitoring_plugin()
 	printf '\n'
 	
 	
+	#print monitoring-plugin details
+	if [ -n "${details}" ]; then
+		printf '%s\n' "${details}"
+	fi
+	
+	
 	#exit with the monitoring-plugin status code as exit status
 	case "${status}" in
 	(0|[Oo][Kk])
@@ -102,7 +109,7 @@ print_status_and_exit_monitoring_plugin()
 #*** Initialisation                                                          ***
 #*******************************************************************************
 #parse arguments
-if [ $# -eq 1 ]; then
+if [ "$#" -eq 1 ]; then
 	case "$1" in
 	(--help|-h)
 		#print the program usage and exit
@@ -113,7 +120,7 @@ if [ $# -eq 1 ]; then
 	(*)
 		print_status_and_exit_monitoring_plugin UNKNOWN 'Invalid monitoring plug-in arguments.'
 	esac
-elif [ $# -eq 0 ]; then
+elif [ "$#" -eq 0 ]; then
 	print_status_and_exit_monitoring_plugin UNKNOWN 'Invalid monitoring plug-in arguments.'
 fi
 
@@ -133,13 +140,13 @@ print_normalised_routing_table()
 {
 	local core_domain_unescaped="$1"
 	#escape non-alphanumeric charakters for use in regular expressions
-	local core_domain="$( printf '%s' "$1"  |  sed 's|\([^[:alnum:]]\)|\\\1|g' )"
-	local first_core_domain="$( printf '%s' "$2"  |  sed 's|\([^[:alnum:]]\)|\\\1|g' )"
+	local core_domain="$( printf '%s' "$1"  |  sed 's%\([^[:alnum:]]\)%\\\1%g' )"
+	local first_core_domain="$( printf '%s' "$2"  |  sed 's%\([^[:alnum:]]\)%\\\1%g' )"
 	
 	
 	#get routing table of the core domain
 	local routing_table="$( sudo /usr/local/bin/dcache_admin "\s System@${core_domain_unescaped} route" 2> /dev/null )"
-	if [ $? -ne 0 ]; then #error handling
+	if [ "$?" -ne 0 ]; then #error handling
 		print_status_and_exit_monitoring_plugin UNKNOWN "Could not get routing table from domain “${core_domain_unescaped}”."
 		return 1 #dummy
 	fi
@@ -188,27 +195,39 @@ print_normalised_routing_table()
 #*******************************************************************************
 #*** Compare Core Domains Routing Tables                                     ***
 #*******************************************************************************
+differences=''
+
 core_domain_a="$1"
 shift 1
+
 
 core_domain_a_routing_table="$( print_normalised_routing_table "${core_domain_a}" )"
 
 
 #compare routing table of the “first” core domain with those of all other core domains
-while [ $# -gt 0 ]; do
+while [ "$#" -gt 0 ]; do
 	core_domain_b="$1"
 	shift 1
 	
 	core_domain_b_routing_table="$( print_normalised_routing_table "${core_domain_b}" "${core_domain_a}" )"
 	
 	if [ "${core_domain_a_routing_table}" != "${core_domain_b_routing_table}" ]; then
-		print_status_and_exit_monitoring_plugin CRITICAL "Routing tables of (at least) core domain “${core_domain_a}” and “${core_domain_b}” differ."
-		break #dummy
+		differences="$(
+		               if [ -n "${differences}" ]; then
+		               	printf '%s\n\n' "${differences}"
+		               fi
+		               printf '%s ↔ %s:\n' "${core_domain_a}" "${core_domain_b}"
+		               diff <( printf '%s' "${core_domain_a_routing_table}" ) <( printf '%s' "${core_domain_b_routing_table}" )  |  grep '^[<>] ' | sed 's/^[<>][[:space:]]*//' | column --output-separator $'\t' -t | sed 's/^/\t/'
+		              )"
 	fi
 done
 
 
-print_status_and_exit_monitoring_plugin OK
+if [ -z "${differences}" ]; then
+	print_status_and_exit_monitoring_plugin OK
+else
+	print_status_and_exit_monitoring_plugin CRITICAL 'Routing tables of core domains differ.' '' "${differences}"
+fi
 
 
 
@@ -230,7 +249,7 @@ exit 0
 
 
 
-#Copyright © 2019, Christoph Anton Mitterer <mail@christoph.anton.mitterer.name>.
+#Copyright © 2019–2021, Christoph Anton Mitterer <mail@christoph.anton.mitterer.name>.
 #All rights reserved.
 #
 #
