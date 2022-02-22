@@ -217,7 +217,7 @@ while [ "$#" -gt 0 ]; do
 		               	printf '%s\n\n' "${differences}"
 		               fi
 		               printf '%s ↔ %s:\n' "${core_domain_a}" "${core_domain_b}"
-		               diff <( printf '%s' "${core_domain_a_routing_table}" ) <( printf '%s' "${core_domain_b_routing_table}" )  |  grep '^[<>] ' | sed 's/^[<>][[:space:]]*//' | column -t | sed 's/^/\t/'
+		               diff <( printf '%s' "${core_domain_a_routing_table}" ) <( printf '%s' "${core_domain_b_routing_table}" )  |  grep '^[<>] ' | sed 's/^[<>][[:space:]]*//' | column --output-separator $'\t' -t | sed 's/^/\t/'
 		              )"
 	fi
 done
